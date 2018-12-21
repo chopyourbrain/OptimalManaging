@@ -10,13 +10,6 @@
 
 namespace plt = matplotlibcpp;
 
-enum Alpha_method
-{
-	LIPSCHITZ = 0,
-	DIVISION = 1,
-	END = 2
-};
-
 double getLipschitzConstant(double c0, double c1, double eps1 = 0.1, double eps2 = 0.1)
 {
 	double lip = std::sqrt(2.0 * c0 * c1);
@@ -66,7 +59,7 @@ bool test_1()
 	return true;
 }
 
-bool test_2(Alpha_method method)
+bool test_2(int method)
 {
 	// Size of grid along time axis
 	const unsigned TIME_GRID_SIZE = 1000;
@@ -91,12 +84,12 @@ bool test_2(Alpha_method method)
 
 	const double a = 1.0;
 
-	const double p_min = -100;
-	const double p_max = 100;
+ 	//const double p_min = -100;
+	//const double p_max = 100;
 
-	//const double R = 50.0;
+	const double R = 50.0;
 
-	const double J_EPS = 0.0001;
+	const double J_EPS = 0.004;
 
 	const double C0 = std::max((std::pow(a, 4.0) * nu * nu + 2.0 * L) / (a * a * nu), 2.0 * L / (a * a));
 	const double C1 = std::max(a * a * nu / 0.1, 1.0 / (a * a * 0.1));
@@ -108,7 +101,7 @@ bool test_2(Alpha_method method)
 
 	// Outside temperature
 	auto p = [](double t) -> double {
-		return 3.0 + t;
+		return 3.0 ;
 	};
 
 	// Descrete form of p
@@ -125,7 +118,7 @@ bool test_2(Alpha_method method)
 
 	// Required distribution of heat in rod
 	auto y = [](double s) -> double {
-		return s * s - std::cos( s );
+		return std::cos( s );
 	};
 
 	std::vector<std::vector<double>> f_discrete(TIME_GRID_SIZE, std::vector<double>(POS_GRID_SIZE));
@@ -256,66 +249,54 @@ bool test_2(Alpha_method method)
 			u0 = solve(alphas, bettas, gammas, b);
 		}
 
-		// Step #3. Make a step of the method of conditional gradient
-		alpha_div = J(x, y) > J(x_old, y) && iters > 0 ? alpha_div / 1.1 : alpha_div;
-		for (unsigned i = 0; i < p_discrete.size(); i++)
+		// Step #3. Make a step of gradient projection by f
+		alpha_div = J(x, y) > J(x_old, y) && iters > 0 ? alpha_div / 2 : alpha_div;
+		std::vector<std::vector<double>> p1(TIME_GRID_SIZE, std::vector<double>(POS_GRID_SIZE));
+		for (unsigned i = 0; i < f_discrete.size(); i++)
 		{
-			// KSI[i][POS_GRID_SIZE - 1] = ψ(l, t)
-			double tmp = KSI[i][POS_GRID_SIZE - 1] > 0 ? p_min : p_max;
+			double partSum=0;
+			for (unsigned i = 0; i < KSI.size(); i++)
+			for (unsigned j = 0; j < KSI[i].size(); j++)
+				p1[i][j] = pow(fabs(KSI[i][j]), 2);
+			std::vector<double> p2(TIME_GRID_SIZE, POS_GRID_SIZE);
+			for (unsigned i = 0; i < p1.size(); i++) { 
+				for (unsigned j = 0; j < p1[i].size(); j++) 
+					p2[i] = p1[i][j];
+				p2[i] *= h;
+			}
+			for (unsigned i = 0; i < p2.size(); i++)
+				partSum += p2[i];
+			partSum *= tau;
+			double tmp =(-R * KSI[i][POS_GRID_SIZE - 1]) / sqrt(partSum);
 			double alpha_lip = std::min(1.0, alpha * a * a * nu * std::abs(a * a * nu * KSI[i][POS_GRID_SIZE - 1] * (tmp - p_discrete[i])) / ((tmp - p_discrete[i]) * (tmp - p_discrete[i])));
 			double alpha_k = 0;
 			switch (method)
 			{
-			case LIPSCHITZ:
+			case 0:
 				alpha_k = alpha_lip;
 				break;
-			case DIVISION:
+			case 1:
 				alpha_k = alpha_div;
 				break;
 			default:
 				assert(false);
 			}
-			p_discrete[i] = p_discrete[i] + alpha_k * (tmp - p_discrete[i]);
+				for (unsigned j = 0; j < f_discrete[i].size(); j++) 
+				f_discrete[i][j] = f_discrete[i][j] + alpha_k * (tmp - f_discrete[i][j]);	
 		}
-
-		// Step #4. Make a step of gradient projection by f
-		// TODO: do later
 		std::cout << "J(x, y) = " << J(x, y) << std::endl;
 		iters++;
 	} while (J(x, y) > J_EPS);
 
-	std::cout << "Iters: " << iters << ", J_EPS: " << J_EPS << std::endl;
-	switch (method)
-	{
-	case LIPSCHITZ:
-		std::cout << "Constant of gradient descent was choosed by Lipschitz method" << std::endl;
-		break;
-	case DIVISION:
-		std::cout << "Constant of gradient descent was choosed by division method" << std::endl;
-		break;
-	default:
-		assert(false);
-	}
-
+	std::cout << "N: " << iters << ", J_EPS: " << J_EPS << std::endl;
 	plt::plot(s_values, x, "r-", s_values, y, "k-");
-	plt::save("xy.jpg");
-	plt::clf();
-
-	std::vector<double> t_discrete( TIME_GRID_SIZE );
-	for( unsigned i = 0; i < TIME_GRID_SIZE; i++ )
-	{
-		t_discrete[i] = i * tau;
-	}
-	plt::plot(t_discrete, p_discrete, "r-");
-	plt::save("p.jpg");
-
+	plt::show();
 	return J(x, y) < J_EPS;
 }
 
 int main(int argc, char **argv)
 {
-	Alpha_method method = DIVISION;
-
+	int method = 1;
 	assert(test_1());
 	assert(test_2(method));
 

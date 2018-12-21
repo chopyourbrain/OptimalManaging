@@ -12,11 +12,11 @@
 #  include <functional>
 #endif
 
-#include <Python.h>
+#include <python2.7/Python.h>
 
 #ifndef WITHOUT_NUMPY
 #  define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#  include <numpy/arrayobject.h>
+#  include </home/mikhail/.local/lib/python2.7/site-packages/numpy/core/include/numpy/arrayobject.h>
 #endif // WITHOUT_NUMPY
 
 #if PY_MAJOR_VERSION >= 3
